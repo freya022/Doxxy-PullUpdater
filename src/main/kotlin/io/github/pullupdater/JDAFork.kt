@@ -55,6 +55,14 @@ object JDAFork {
                 }
             }.body()
 
+            if (pullRequest.merged) {
+                return Result(HttpStatusCode.OK, "OK")
+            }
+
+            if (!pullRequest.mergeable) {
+                return Result(HttpStatusCode.Conflict, "Head branch cannot be updated")
+            }
+
             //JDA repo most likely
             val base = pullRequest.base
             val baseBranchName = base.branchName
