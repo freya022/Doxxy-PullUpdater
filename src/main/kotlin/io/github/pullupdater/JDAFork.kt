@@ -112,7 +112,9 @@ object JDAFork {
             }
 
             //Publish result on our fork
-            runProcess(forkPath, "git", "push", "origin")
+            // Force push is used as the bot takes the remote head branch instead of reusing the local one,
+            // meaning the remote branch would always be incompatible on the 2nd update
+            runProcess(forkPath, "git", "push", "--force", "origin")
 
             return Result(HttpStatusCode.OK, "OK")
         } finally {
