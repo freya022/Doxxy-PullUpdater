@@ -78,66 +78,81 @@ object JDAFork {
                 return Result.OK
             }
 
-            //JDA repo most likely
-            val base = pullRequest.base
-            val baseBranchName = base.branchName
-            val baseRepo = base.repo.name
-            val baseRemoteName = base.user.userName
+            val result = doUpdate(pullRequest)
 
-            //The PR author's repo
-            val head = pullRequest.head
-            val headBranchName = head.branchName
-            val headRepo = head.repo.name
-            val headUserName = head.user.userName
-            val headRemoteName = head.user.userName
-
-            //Add remote
-            val remotes = runProcess(forkPath, "git", "remote").trim().lines()
-            if (baseRemoteName !in remotes) {
-                runProcess(forkPath, "git", "remote", "add", baseRemoteName, "https://github.com/$baseRemoteName/$baseRepo")
-            }
-            if (headRemoteName !in remotes) {
-                runProcess(forkPath, "git", "remote", "add", headRemoteName, "https://github.com/$headRemoteName/$headRepo")
+            if (result == Result.OK) {
+                latestHeadSha[pullRequest.head.label] = pullRequest.head.sha
+                latestBaseSha[pullRequest.base.label] = pullRequest.base.sha
             }
 
-            //Fetch base and head repo
-            runProcess(forkPath, "git", "fetch", baseRemoteName)
-            runProcess(forkPath, "git", "fetch", headRemoteName)
-
-            //Use remote branch
-            val headRemoteReference = "refs/remotes/$headRemoteName/$headBranchName"
-            try {
-                runProcess(forkPath, "git", "switch", "--force-create", "$headUserName/$headBranchName", headRemoteReference)
-            } catch (e: ProcessException) {
-                if (e.errorOutput.startsWith("fatal: invalid reference")) {
-                    return Result(HttpStatusCode.NotFound, "Head reference '$headRemoteReference' was not found")
-                }
-                return Result(HttpStatusCode.InternalServerError, "Error while switching to head branch")
-            }
-
-            //Merge base branch into remote branch
-            val baseRemoteReference = "$baseRemoteName/$baseBranchName"
-            try {
-                runProcess(forkPath, "git", "merge", baseRemoteReference)
-            } catch (e: ProcessException) {
-                if (e.errorOutput.startsWith("fatal: invalid reference")) {
-                    return Result(HttpStatusCode.NotFound, "Base reference '$baseRemoteReference' was not found")
-                }
-                return Result(HttpStatusCode.InternalServerError, "Error while switching to base branch")
-            }
-
-            //Publish result on our fork
-            // Force push is used as the bot takes the remote head branch instead of reusing the local one,
-            // meaning the remote branch would always be incompatible on the 2nd update
-            runProcess(forkPath, "git", "push", "--force", "origin")
-
-            latestHeadSha[pullRequest.head.label] = pullRequest.head.sha
-            latestBaseSha[pullRequest.base.label] = pullRequest.base.sha
-
-            return Result.OK
+            return result
         } finally {
             semaphore.release()
         }
+    }
+
+    private suspend fun doUpdate(pullRequest: PullRequest): Result {
+        //JDA repo most likely
+        val base = pullRequest.base
+        val baseBranchName = base.branchName
+        val baseRepo = base.repo.name
+        val baseRemoteName = base.user.userName
+
+        //The PR author's repo
+        val head = pullRequest.head
+        val headBranchName = head.branchName
+        val headRepo = head.repo.name
+        val headUserName = head.user.userName
+        val headRemoteName = head.user.userName
+
+        //Add remote
+        val remotes = runProcess(forkPath, "git", "remote").trim().lines()
+        if (baseRemoteName !in remotes) {
+            runProcess(forkPath, "git", "remote", "add", baseRemoteName, "https://github.com/$baseRemoteName/$baseRepo")
+        }
+        if (headRemoteName !in remotes) {
+            runProcess(forkPath, "git", "remote", "add", headRemoteName, "https://github.com/$headRemoteName/$headRepo")
+        }
+
+        //Fetch base and head repo
+        runProcess(forkPath, "git", "fetch", baseRemoteName)
+        runProcess(forkPath, "git", "fetch", headRemoteName)
+
+        //Use remote branch
+        val headRemoteReference = "refs/remotes/$headRemoteName/$headBranchName"
+        try {
+            runProcess(
+                forkPath,
+                "git",
+                "switch",
+                "--force-create",
+                "$headUserName/$headBranchName",
+                headRemoteReference
+            )
+        } catch (e: ProcessException) {
+            if (e.errorOutput.startsWith("fatal: invalid reference")) {
+                return Result(HttpStatusCode.NotFound, "Head reference '$headRemoteReference' was not found")
+            }
+            return Result(HttpStatusCode.InternalServerError, "Error while switching to head branch")
+        }
+
+        //Merge base branch into remote branch
+        val baseRemoteReference = "$baseRemoteName/$baseBranchName"
+        try {
+            runProcess(forkPath, "git", "merge", baseRemoteReference)
+        } catch (e: ProcessException) {
+            if (e.errorOutput.startsWith("fatal: invalid reference")) {
+                return Result(HttpStatusCode.NotFound, "Base reference '$baseRemoteReference' was not found")
+            }
+            return Result(HttpStatusCode.InternalServerError, "Error while switching to base branch")
+        }
+
+        //Publish result on our fork
+        // Force push is used as the bot takes the remote head branch instead of reusing the local one,
+        // meaning the remote branch would always be incompatible on the 2nd update
+        runProcess(forkPath, "git", "push", "--force", "origin")
+
+        return Result.OK
     }
 
     private suspend fun init() {
