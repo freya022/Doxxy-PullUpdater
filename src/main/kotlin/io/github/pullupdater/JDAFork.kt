@@ -55,6 +55,16 @@ object JDAFork {
                 "git", "config", "--local", "user.email", config.gitEmail
             )
 
+            //Disable signing just in case
+            runProcess(
+                workingDirectory = forkPathTmp,
+                "git", "config", "--local", "commit.gpgsign", "false"
+            )
+            runProcess(
+                workingDirectory = forkPathTmp,
+                "git", "config", "--local", "tag.gpgsign", "false"
+            )
+
             forkPathTmp.moveTo(forkPath, StandardCopyOption.ATOMIC_MOVE)
         }
     }
