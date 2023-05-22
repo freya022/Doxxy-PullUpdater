@@ -13,7 +13,7 @@ data class GithubRepository(val name: String)
 @Serializable
 data class PullRequest(val head: Branch, val base: Branch, val merged: Boolean, val mergeable: Boolean) {
     @Serializable
-    data class Branch(val ref: String, val user: GithubUser, val repo: GithubRepository) {
+    data class Branch(val label: String, val ref: String, val sha: String, val user: GithubUser, val repo: GithubRepository) {
         val branchName get() = ref
     }
 }

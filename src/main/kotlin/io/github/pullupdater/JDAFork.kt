@@ -23,6 +23,9 @@ import kotlin.io.path.moveTo
 import kotlin.io.path.name
 import kotlin.io.path.notExists
 
+private typealias BranchLabel = String
+private typealias BranchSha = String
+
 object JDAFork {
     class Result(val statusCode: HttpStatusCode, val errorMessage: String) {
         companion object {
@@ -40,6 +43,9 @@ object JDAFork {
         }
     }
     private val semaphore = Semaphore(1)
+
+    private val latestHeadSha: MutableMap<BranchLabel, BranchSha> = hashMapOf()
+    private val latestBaseSha: MutableMap<BranchLabel, BranchSha> = hashMapOf()
 
     suspend fun requestUpdate(prNumber: Int): Result {
         if (!semaphore.tryAcquire()) {
@@ -65,6 +71,11 @@ object JDAFork {
 
             if (!pullRequest.mergeable) {
                 return Result(HttpStatusCode.Conflict, "Head branch cannot be updated")
+            }
+
+            //Prevent unnecessary updates by checking if the latest SHA is the same on the remote
+            if (latestHeadSha[pullRequest.head.label] == pullRequest.head.sha && latestBaseSha[pullRequest.base.label] == pullRequest.base.sha) {
+                return Result.OK
             }
 
             //JDA repo most likely
@@ -119,6 +130,9 @@ object JDAFork {
             // Force push is used as the bot takes the remote head branch instead of reusing the local one,
             // meaning the remote branch would always be incompatible on the 2nd update
             runProcess(forkPath, "git", "push", "--force", "origin")
+
+            latestHeadSha[pullRequest.head.label] = pullRequest.head.sha
+            latestBaseSha[pullRequest.base.label] = pullRequest.base.sha
 
             return Result.OK
         } finally {
