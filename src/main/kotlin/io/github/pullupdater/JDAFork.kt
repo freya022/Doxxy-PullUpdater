@@ -66,15 +66,13 @@ object JDAFork {
             }.body()
 
             if (pullRequest.merged) {
+                //Skip merged PRs
                 return Result.OK
-            }
-
-            if (!pullRequest.mergeable) {
+            } else if (!pullRequest.mergeable) {
+                //Skip PRs with conflicts
                 return Result(HttpStatusCode.Conflict, "Head branch cannot be updated")
-            }
-
-            //Prevent unnecessary updates by checking if the latest SHA is the same on the remote
-            if (latestHeadSha[pullRequest.head.label] == pullRequest.head.sha && latestBaseSha[pullRequest.base.label] == pullRequest.base.sha) {
+            } else if (latestHeadSha[pullRequest.head.label] == pullRequest.head.sha && latestBaseSha[pullRequest.base.label] == pullRequest.base.sha) {
+                //Prevent unnecessary updates by checking if the latest SHA is the same on the remote
                 return Result.OK
             }
 
