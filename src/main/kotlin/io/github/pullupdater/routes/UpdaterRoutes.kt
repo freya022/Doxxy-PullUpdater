@@ -21,8 +21,8 @@ fun Route.updaterRouting() {
                 )
             }
 
-            val statusCode = JDAFork.requestUpdate(prNumber)
-            call.respond(statusCode)
+            val result = JDAFork.requestUpdate(prNumber)
+            call.respondText(contentType = ContentType.Application.Json, status = result.statusCode, text = """{ "message": "${result.errorMessage}" }""")
         }
     }
 }

@@ -7,7 +7,6 @@ import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
-import io.ktor.utils.io.errors.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -25,6 +24,8 @@ import kotlin.io.path.name
 import kotlin.io.path.notExists
 
 object JDAFork {
+    class Result(val statusCode: HttpStatusCode, val errorMessage: String)
+
     private val logger = LoggerFactory.getLogger(JDAFork::class.java)
     private val config = Config.instance
     private val forkPath = Path(System.getProperty("user.home"), "Bots", "Doxxy", "JDA-Fork")
@@ -36,9 +37,9 @@ object JDAFork {
     }
     private val semaphore = Semaphore(1)
 
-    suspend fun requestUpdate(prNumber: Int): HttpStatusCode {
+    suspend fun requestUpdate(prNumber: Int): Result {
         if (!semaphore.tryAcquire()) {
-            return HttpStatusCode.TooManyRequests
+            return Result(HttpStatusCode.TooManyRequests, "Already running")
         }
 
         try {
@@ -48,7 +49,9 @@ object JDAFork {
                 header("Accept", "applications/vnd.github.v3+json")
             }.also {
                 if (it.status == HttpStatusCode.NotFound) {
-                    return HttpStatusCode.NotFound
+                    return Result(HttpStatusCode.NotFound, "Pull request not found")
+                } else if (!it.status.isSuccess()) {
+                    return Result(HttpStatusCode.InternalServerError, "Error while getting pull request")
                 }
             }.body()
 
@@ -79,15 +82,31 @@ object JDAFork {
             runProcess(forkPath, "git", "fetch", headRemoteName)
 
             //Use remote branch
-            runProcess(forkPath, "git", "switch", "--force-create", "$headUserName/$headBranchName", "refs/remotes/$headRemoteName/$headBranchName")
+            val headRemoteReference = "refs/remotes/$headRemoteName/$headBranchName"
+            try {
+                runProcess(forkPath, "git", "switch", "--force-create", "$headUserName/$headBranchName", headRemoteReference)
+            } catch (e: ProcessException) {
+                if (e.errorOutput.startsWith("fatal: invalid reference")) {
+                    return Result(HttpStatusCode.NotFound, "Head reference '$headRemoteReference' was not found")
+                }
+                return Result(HttpStatusCode.InternalServerError, "Error while switching to head branch")
+            }
 
             //Merge base branch into remote branch
-            runProcess(forkPath, "git", "merge", "$baseRemoteName/$baseBranchName")
+            val baseRemoteReference = "$baseRemoteName/$baseBranchName"
+            try {
+                runProcess(forkPath, "git", "merge", baseRemoteReference)
+            } catch (e: ProcessException) {
+                if (e.errorOutput.startsWith("fatal: invalid reference")) {
+                    return Result(HttpStatusCode.NotFound, "Base reference '$baseRemoteReference' was not found")
+                }
+                return Result(HttpStatusCode.InternalServerError, "Error while switching to base branch")
+            }
 
             //Publish result on our fork
             runProcess(forkPath, "git", "push", "origin")
 
-            return HttpStatusCode.OK
+            return Result(HttpStatusCode.OK, "OK")
         } finally {
             semaphore.release()
         }
@@ -150,7 +169,7 @@ object JDAFork {
                 else -> logger.warn("No error output")
             }
 
-            throw IOException("Process exited with code $exitCode: ${command.joinToString(" ") { if (it.contains("github_pat_")) "[bot_repo]" else it }}")
+            throw ProcessException(exitCode, errorString, "Process exited with code $exitCode: ${command.joinToString(" ") { if (it.contains("github_pat_")) "[bot_repo]" else it }}")
         }
 
         return@withContext outputStream.toByteArray().decodeToString()
