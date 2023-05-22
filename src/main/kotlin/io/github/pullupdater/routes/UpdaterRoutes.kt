@@ -21,11 +21,8 @@ fun Route.updaterRouting() {
                 )
             }
 
-            if (!JDAFork.requestUpdate(prNumber)) {
-                return@get call.respond(HttpStatusCode.TooManyRequests)
-            }
-
-            call.respond(HttpStatusCode.OK)
+            val statusCode = JDAFork.requestUpdate(prNumber)
+            call.respond(statusCode)
         }
     }
 }

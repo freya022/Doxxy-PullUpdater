@@ -5,6 +5,7 @@ import io.ktor.client.call.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.errors.*
 import kotlinx.coroutines.Dispatchers
@@ -35,9 +36,9 @@ object JDAFork {
     }
     private val semaphore = Semaphore(1)
 
-    suspend fun requestUpdate(prNumber: Int): Boolean {
+    suspend fun requestUpdate(prNumber: Int): HttpStatusCode {
         if (!semaphore.tryAcquire()) {
-            return false
+            return HttpStatusCode.TooManyRequests
         }
 
         try {
@@ -45,6 +46,10 @@ object JDAFork {
 
             val pullRequest: PullRequest = client.get("https://api.github.com/repos/DV8FromTheWorld/JDA/pulls/$prNumber") {
                 header("Accept", "applications/vnd.github.v3+json")
+            }.also {
+                if (it.status == HttpStatusCode.NotFound) {
+                    return HttpStatusCode.NotFound
+                }
             }.body()
 
             //JDA repo most likely
@@ -82,7 +87,7 @@ object JDAFork {
             //Publish result on our fork
             runProcess(forkPath, "git", "push", "origin")
 
-            return true
+            return HttpStatusCode.OK
         } finally {
             semaphore.release()
         }

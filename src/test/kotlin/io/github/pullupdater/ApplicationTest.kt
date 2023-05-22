@@ -6,6 +6,7 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFails
 
 class ApplicationTest {
     @Test
@@ -15,6 +16,18 @@ class ApplicationTest {
         }
         client.get("/update/1878").apply {
             assertEquals(HttpStatusCode.OK, status)
+        }
+
+        client.get("/update/-1").apply {
+            assertEquals(HttpStatusCode.NotFound, status)
+        }
+
+        client.get("/update/2463").apply {
+            assertEquals(HttpStatusCode.OK, status)
+        }
+
+        assertFails {
+            client.get("/update/2465")
         }
     }
 }
