@@ -86,7 +86,7 @@ object JDAFork {
                 else -> logger.warn("No error output")
             }
 
-            throw IOException("Process exited with code $exitCode: ${command.joinToString(" ") { if (it.startsWith("https:")) "[link]" else it }}")
+            throw IOException("Process exited with code $exitCode: ${command.joinToString(" ") { if (it.contains("github_pat_")) "[bot_repo]" else it }}")
         }
     }
 
