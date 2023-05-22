@@ -10,7 +10,8 @@ import io.ktor.serialization.kotlinx.json.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -42,17 +43,17 @@ object JDAFork {
             json(json = Json { ignoreUnknownKeys = true })
         }
     }
-    private val semaphore = Semaphore(1)
+    private val mutex = Mutex()
 
     private val latestHeadSha: MutableMap<BranchLabel, BranchSha> = hashMapOf()
     private val latestBaseSha: MutableMap<BranchLabel, BranchSha> = hashMapOf()
 
     suspend fun requestUpdate(prNumber: Int): Result {
-        if (!semaphore.tryAcquire()) {
+        if (mutex.isLocked) {
             return Result(HttpStatusCode.TooManyRequests, "Already running")
         }
 
-        try {
+        mutex.withLock {
             init()
 
             val pullRequest: PullRequest = client.get("https://api.github.com/repos/DV8FromTheWorld/JDA/pulls/$prNumber") {
@@ -84,8 +85,6 @@ object JDAFork {
             }
 
             return result
-        } finally {
-            semaphore.release()
         }
     }
 
