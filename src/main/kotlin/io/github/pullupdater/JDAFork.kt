@@ -24,7 +24,11 @@ import kotlin.io.path.name
 import kotlin.io.path.notExists
 
 object JDAFork {
-    class Result(val statusCode: HttpStatusCode, val errorMessage: String)
+    class Result(val statusCode: HttpStatusCode, val errorMessage: String) {
+        companion object {
+            val OK = Result(HttpStatusCode.OK, "OK")
+        }
+    }
 
     private val logger = LoggerFactory.getLogger(JDAFork::class.java)
     private val config = Config.instance
@@ -56,7 +60,7 @@ object JDAFork {
             }.body()
 
             if (pullRequest.merged) {
-                return Result(HttpStatusCode.OK, "OK")
+                return Result.OK
             }
 
             if (!pullRequest.mergeable) {
@@ -116,7 +120,7 @@ object JDAFork {
             // meaning the remote branch would always be incompatible on the 2nd update
             runProcess(forkPath, "git", "push", "--force", "origin")
 
-            return Result(HttpStatusCode.OK, "OK")
+            return Result.OK
         } finally {
             semaphore.release()
         }
