@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
@@ -28,9 +30,26 @@ private typealias BranchLabel = String
 private typealias BranchSha = String
 
 object JDAFork {
-    class Result(val statusCode: HttpStatusCode, val errorMessage: String) {
+    @Serializable
+    data class BranchIdentifier(val forkBotName: String, val forkRepoName: String, val forkedBranchName: String)
+    @Serializable
+    data class FailMessage(val message: String)
+    class Result private constructor(val statusCode: HttpStatusCode, val body: String) {
         companion object {
-            val OK = Result(HttpStatusCode.OK, "OK")
+            fun ok(pullRequest: PullRequest) = Result(
+                HttpStatusCode.OK,
+                Json.encodeToString(
+                    BranchIdentifier(
+                        config.forkBotName,
+                        config.forkRepoName,
+                        pullRequest.head.toForkedBranchName()
+                    )
+                )
+            )
+
+            fun fail(statusCode: HttpStatusCode, message: String): Result {
+                return Result(statusCode, Json.encodeToString(FailMessage(message)))
+            }
         }
     }
 
@@ -50,7 +69,7 @@ object JDAFork {
 
     suspend fun requestUpdate(prNumber: Int): Result {
         if (mutex.isLocked) {
-            return Result(HttpStatusCode.TooManyRequests, "Already running")
+            return Result.fail(HttpStatusCode.TooManyRequests, "Already running")
         }
 
         mutex.withLock {
@@ -60,26 +79,26 @@ object JDAFork {
                 header("Accept", "applications/vnd.github.v3+json")
             }.also {
                 if (it.status == HttpStatusCode.NotFound) {
-                    return Result(HttpStatusCode.NotFound, "Pull request not found")
+                    return Result.fail(HttpStatusCode.NotFound, "Pull request not found")
                 } else if (!it.status.isSuccess()) {
-                    return Result(HttpStatusCode.InternalServerError, "Error while getting pull request")
+                    return Result.fail(HttpStatusCode.InternalServerError, "Error while getting pull request")
                 }
             }.body()
 
             if (pullRequest.merged) {
                 //Skip merged PRs
-                return Result.OK
+                return Result.ok(pullRequest)
             } else if (pullRequest.mergeable == false) {
                 //Skip PRs with conflicts
-                return Result(HttpStatusCode.Conflict, "Head branch cannot be updated")
+                return Result.fail(HttpStatusCode.Conflict, "Head branch cannot be updated")
             } else if (latestHeadSha[pullRequest.head.label] == pullRequest.head.sha && latestBaseSha[pullRequest.base.label] == pullRequest.base.sha) {
                 //Prevent unnecessary updates by checking if the latest SHA is the same on the remote
-                return Result.OK
+                return Result.ok(pullRequest)
             }
 
             val result = doUpdate(pullRequest)
 
-            if (result == Result.OK) {
+            if (result.statusCode == HttpStatusCode.OK) {
                 latestHeadSha[pullRequest.head.label] = pullRequest.head.sha
                 latestBaseSha[pullRequest.base.label] = pullRequest.base.sha
             }
@@ -99,7 +118,6 @@ object JDAFork {
         val head = pullRequest.head
         val headBranchName = head.branchName
         val headRepo = head.repo.name
-        val headUserName = head.user.userName
         val headRemoteName = head.user.userName
 
         //Add remote
@@ -123,14 +141,14 @@ object JDAFork {
                 "git",
                 "switch",
                 "--force-create",
-                "$headUserName/$headBranchName",
+                head.toForkedBranchName(),
                 headRemoteReference
             )
         } catch (e: ProcessException) {
             if (e.errorOutput.startsWith("fatal: invalid reference")) {
-                return Result(HttpStatusCode.NotFound, "Head reference '$headRemoteReference' was not found")
+                return Result.fail(HttpStatusCode.NotFound, "Head reference '$headRemoteReference' was not found")
             }
-            return Result(HttpStatusCode.InternalServerError, "Error while switching to head branch")
+            return Result.fail(HttpStatusCode.InternalServerError, "Error while switching to head branch")
         }
 
         //Merge base branch into remote branch
@@ -139,9 +157,9 @@ object JDAFork {
             runProcess(forkPath, "git", "merge", baseRemoteReference)
         } catch (e: ProcessException) {
             if (e.errorOutput.startsWith("fatal: invalid reference")) {
-                return Result(HttpStatusCode.NotFound, "Base reference '$baseRemoteReference' was not found")
+                return Result.fail(HttpStatusCode.NotFound, "Base reference '$baseRemoteReference' was not found")
             }
-            return Result(HttpStatusCode.InternalServerError, "Error while switching to base branch")
+            return Result.fail(HttpStatusCode.InternalServerError, "Error while switching to base branch")
         }
 
         //Publish result on our fork
@@ -149,7 +167,7 @@ object JDAFork {
         // meaning the remote branch would always be incompatible on the 2nd update
         runProcess(forkPath, "git", "push", "--force", "origin")
 
-        return Result.OK
+        return Result.ok(pullRequest)
     }
 
     private suspend fun init() {
@@ -157,7 +175,7 @@ object JDAFork {
             val forkPathTmp = forkPath.resolveSibling("JDA-Fork-tmp")
             runProcess(
                 workingDirectory = forkPathTmp.parent,
-                "git", "clone", "https://${config.gitToken}@github.com/JDA-Fork/JDA", forkPathTmp.name
+                "git", "clone", "https://${config.gitToken}@github.com/${config.forkBotName}/${config.forkRepoName}", forkPathTmp.name
             )
             runProcess(
                 workingDirectory = forkPathTmp,
@@ -181,6 +199,8 @@ object JDAFork {
             forkPathTmp.moveTo(forkPath, StandardCopyOption.ATOMIC_MOVE)
         }
     }
+
+    private fun PullRequest.Branch.toForkedBranchName() = "${user.userName}/$branchName"
 
     private suspend fun runProcess(workingDirectory: Path, vararg command: String): String = withContext(Dispatchers.IO) {
         val process = ProcessBuilder(command.asList())
