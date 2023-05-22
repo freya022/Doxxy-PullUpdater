@@ -1,11 +1,18 @@
 package io.github.pullupdater
 
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.serialization.kotlinx.json.*
 import io.ktor.utils.io.errors.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -21,6 +28,11 @@ object JDAFork {
     private val config = Config.instance
     private val forkPath = Path(System.getProperty("user.home"), "Bots", "Doxxy", "JDA-Fork")
 
+    private val client = HttpClient(OkHttp) {
+        install(ContentNegotiation) {
+            json(json = Json { ignoreUnknownKeys = true })
+        }
+    }
     private val semaphore = Semaphore(1)
 
     suspend fun requestUpdate(prNumber: Int): Boolean {
@@ -31,7 +43,44 @@ object JDAFork {
         try {
             init()
 
-            //TODO
+            val pullRequest: PullRequest = client.get("https://api.github.com/repos/DV8FromTheWorld/JDA/pulls/$prNumber") {
+                header("Accept", "applications/vnd.github.v3+json")
+            }.body()
+
+            //JDA repo most likely
+            val base = pullRequest.base
+            val baseBranchName = base.branchName
+            val baseRepo = base.repo.name
+            val baseRemoteName = base.user.userName
+
+            //The PR author's repo
+            val head = pullRequest.head
+            val headBranchName = head.branchName
+            val headRepo = head.repo.name
+            val headUserName = head.user.userName
+            val headRemoteName = head.user.userName
+
+            //Add remote
+            val remotes = runProcess(forkPath, "git", "remote").trim().lines()
+            if (baseRemoteName !in remotes) {
+                runProcess(forkPath, "git", "remote", "add", baseRemoteName, "https://github.com/$baseRemoteName/$baseRepo")
+            }
+            if (headRemoteName !in remotes) {
+                runProcess(forkPath, "git", "remote", "add", headRemoteName, "https://github.com/$headRemoteName/$headRepo")
+            }
+
+            //Fetch base and head repo
+            runProcess(forkPath, "git", "fetch", baseRemoteName)
+            runProcess(forkPath, "git", "fetch", headRemoteName)
+
+            //Use remote branch
+            runProcess(forkPath, "git", "switch", "--force-create", "$headUserName/$headBranchName", "refs/remotes/$headRemoteName/$headBranchName")
+
+            //Merge base branch into remote branch
+            runProcess(forkPath, "git", "merge", "$baseRemoteName/$baseBranchName")
+
+            //Publish result on our fork
+            runProcess(forkPath, "git", "push", "origin")
 
             return true
         } finally {
