@@ -1,5 +1,6 @@
 package io.github.pullupdater.routes
 
+import io.github.pullupdater.JDAFork
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.response.*
@@ -20,7 +21,11 @@ fun Route.updaterRouting() {
                 )
             }
 
+            if (!JDAFork.requestUpdate(prNumber)) {
+                return@get call.respond(HttpStatusCode.TooManyRequests)
+            }
 
+            call.respond(HttpStatusCode.OK)
         }
     }
 }
