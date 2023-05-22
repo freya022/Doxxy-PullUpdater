@@ -59,7 +59,7 @@ object JDAFork {
         }
     }
 
-    private suspend fun runProcess(workingDirectory: Path, vararg command: String) = withContext(Dispatchers.IO) {
+    private suspend fun runProcess(workingDirectory: Path, vararg command: String): String = withContext(Dispatchers.IO) {
         val process = ProcessBuilder(command.asList())
             .directory(workingDirectory.toFile())
             .start()
@@ -88,6 +88,8 @@ object JDAFork {
 
             throw IOException("Process exited with code $exitCode: ${command.joinToString(" ") { if (it.contains("github_pat_")) "[bot_repo]" else it }}")
         }
+
+        return@withContext outputStream.toByteArray().decodeToString()
     }
 
     private fun redirectStream(arrayStream: ByteArrayOutputStream, processStream: InputStream) {
