@@ -6,7 +6,6 @@ import io.ktor.http.*
 import io.ktor.server.testing.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFails
 
 class ApplicationTest {
     @Test
@@ -14,6 +13,8 @@ class ApplicationTest {
         application {
             configureRouting()
         }
+
+        //Already up to date
         client.get("/update/1878").apply {
             assertEquals(HttpStatusCode.OK, status)
         }
@@ -26,8 +27,9 @@ class ApplicationTest {
             assertEquals(HttpStatusCode.OK, status)
         }
 
-        assertFails {
-            client.get("/update/2465")
+        //Already merged
+        client.get("/update/2465").apply {
+            assertEquals(HttpStatusCode.OK, status)
         }
     }
 }

@@ -68,7 +68,7 @@ object JDAFork {
             if (pullRequest.merged) {
                 //Skip merged PRs
                 return Result.OK
-            } else if (!pullRequest.mergeable) {
+            } else if (pullRequest.mergeable == false) {
                 //Skip PRs with conflicts
                 return Result(HttpStatusCode.Conflict, "Head branch cannot be updated")
             } else if (latestHeadSha[pullRequest.head.label] == pullRequest.head.sha && latestBaseSha[pullRequest.base.label] == pullRequest.base.sha) {
