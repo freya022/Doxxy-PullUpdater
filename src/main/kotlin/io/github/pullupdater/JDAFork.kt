@@ -67,7 +67,11 @@ object JDAFork {
     private val latestHeadSha: MutableMap<BranchLabel, BranchSha> = hashMapOf()
     private val latestBaseSha: MutableMap<BranchLabel, BranchSha> = hashMapOf()
 
-    suspend fun requestUpdate(prNumber: Int): Result {
+    suspend fun requestUpdate(repository: String, prNumber: Int): Result {
+        if (repository != "JDA") {
+            return Result.fail(HttpStatusCode.BadRequest, "Only JDA is supported")
+        }
+
         if (mutex.isLocked) {
             return Result.fail(HttpStatusCode.TooManyRequests, "Already running")
         }

@@ -19,21 +19,26 @@ class ApplicationTest {
 
         val client = client.config { this.defaultRequest { this.bearerAuth(Config.instance.doxxyToken) } }
         //Already up to date
-        client.get("/update/1878").apply {
+        client.get("/update/JDA/1878").apply {
             assertEquals(HttpStatusCode.OK, status)
         }
 
-        client.get("/update/-1").apply {
+        client.get("/update/JDA/-1").apply {
             assertEquals(HttpStatusCode.NotFound, status)
         }
 
-        client.get("/update/2463").apply {
+        client.get("/update/JDA/2463").apply {
             assertEquals(HttpStatusCode.OK, status)
         }
 
         //Already merged
-        client.get("/update/2465").apply {
+        client.get("/update/JDA/2465").apply {
             assertEquals(HttpStatusCode.OK, status)
+        }
+
+        //Invalid repo
+        client.get("/update/BotCommands/2465").apply {
+            assertEquals(HttpStatusCode.BadRequest, status)
         }
     }
 }

@@ -8,17 +8,20 @@ import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 
+@Suppress("unused")
 @Resource("/update")
 class PullRequestUpdate() {
-    @Suppress("unused")
-    @Resource("/{pullNumber}")
-    class Number(val parent: PullRequestUpdate = PullRequestUpdate(), val pullNumber: Int)
+    @Resource("{repository}")
+    class Repository(val parent: PullRequestUpdate, val repository: String) {
+        @Resource("{pullNumber}")
+        class Number(val parent: Repository, val pullNumber: Int)
+    }
 }
 
 fun Route.updaterRouting() {
-    get<PullRequestUpdate.Number> { pullRequest ->
+    get<PullRequestUpdate.Repository.Number> { pullRequest ->
         val result = runCatching {
-            JDAFork.requestUpdate(pullRequest.pullNumber)
+            JDAFork.requestUpdate(pullRequest.parent.repository, pullRequest.pullNumber)
         }.getOrElse { JDAFork.Result.fail(HttpStatusCode.InternalServerError, "Unknown error while updating PR") }
         call.respondText(contentType = ContentType.Application.Json, status = result.statusCode, text = result.body)
     }
