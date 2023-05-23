@@ -21,7 +21,9 @@ fun Route.updaterRouting() {
                 )
             }
 
-            val result = JDAFork.requestUpdate(prNumber)
+            val result = runCatching {
+                JDAFork.requestUpdate(prNumber)
+            }.getOrElse { JDAFork.Result.fail(HttpStatusCode.InternalServerError, "Unknown error while updating PR") }
             call.respondText(contentType = ContentType.Application.Json, status = result.statusCode, text = result.body)
         }
     }
