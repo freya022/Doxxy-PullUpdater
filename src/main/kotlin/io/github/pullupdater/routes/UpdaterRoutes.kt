@@ -7,6 +7,9 @@ import io.ktor.server.application.*
 import io.ktor.server.resources.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger { }
 
 @Suppress("unused")
 @Resource("/update")
@@ -22,7 +25,10 @@ fun Route.updaterRouting() {
     get<PullRequestUpdate.Repository.Number> { pullRequest ->
         val result = runCatching {
             JDAFork.requestUpdate(pullRequest.parent.repository, pullRequest.pullNumber)
-        }.getOrElse { JDAFork.Result.fail(HttpStatusCode.InternalServerError, "Unknown error while updating PR") }
+        }.getOrElse {
+            logger.error("Unknown error while updating PR", it)
+            JDAFork.Result.fail(HttpStatusCode.InternalServerError, "Unknown error while updating PR")
+        }
         call.respondText(contentType = ContentType.Application.Json, status = result.statusCode, text = result.body)
     }
 }
