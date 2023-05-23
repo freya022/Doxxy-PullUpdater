@@ -17,7 +17,11 @@ class ApplicationTest {
             configureRouting()
         }
 
-        val client = client.config { this.defaultRequest { this.bearerAuth(Config.instance.doxxyToken) } }
+        val client = client.config {
+            defaultRequest {
+                bearerAuth(Config.instance.doxxyToken)
+            }
+        }
         //Already up to date
         client.get("/update/JDA/1878").apply {
             assertEquals(HttpStatusCode.OK, status)
