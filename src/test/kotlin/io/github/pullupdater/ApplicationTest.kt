@@ -1,6 +1,8 @@
 package io.github.pullupdater
 
+import io.github.pullupdater.plugins.configureAuth
 import io.github.pullupdater.plugins.configureRouting
+import io.ktor.client.plugins.*
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.server.testing.*
@@ -11,9 +13,11 @@ class ApplicationTest {
     @Test
     fun testRoot() = testApplication {
         application {
+            configureAuth()
             configureRouting()
         }
 
+        val client = client.config { this.defaultRequest { this.bearerAuth(Config.instance.doxxyToken) } }
         //Already up to date
         client.get("/update/1878").apply {
             assertEquals(HttpStatusCode.OK, status)

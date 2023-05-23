@@ -1,5 +1,6 @@
 package io.github.pullupdater
 
+import io.github.pullupdater.plugins.configureAuth
 import io.github.pullupdater.plugins.configureRouting
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -11,5 +12,6 @@ fun main() {
 }
 
 fun Application.module() {
+    configureAuth()
     configureRouting()
 }
