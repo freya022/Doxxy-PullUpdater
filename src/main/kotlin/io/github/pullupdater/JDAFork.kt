@@ -16,7 +16,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.slf4j.LoggerFactory
+import mu.KotlinLogging
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.file.Path
@@ -53,7 +53,7 @@ object JDAFork {
         }
     }
 
-    private val logger = LoggerFactory.getLogger(JDAFork::class.java)
+    private val logger = KotlinLogging.logger { }
     private val config = Config.instance
     private val forkPath = Path(System.getProperty("user.home"), "Bots", "Doxxy", "JDA-Fork")
 
