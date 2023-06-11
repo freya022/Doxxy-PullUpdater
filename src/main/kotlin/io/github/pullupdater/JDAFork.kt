@@ -125,12 +125,14 @@ object JDAFork {
         val headRemoteName = head.user.userName
 
         //Add remote
-        val remotes = runProcess(forkPath, "git", "remote").trim().lines()
+        val remotes = runProcess(forkPath, "git", "remote").trim().lineSequence().toMutableList()
         if (baseRemoteName !in remotes) {
             runProcess(forkPath, "git", "remote", "add", baseRemoteName, "https://github.com/$baseRemoteName/$baseRepo")
+            remotes += baseRemoteName
         }
         if (headRemoteName !in remotes) {
             runProcess(forkPath, "git", "remote", "add", headRemoteName, "https://github.com/$headRemoteName/$headRepo")
+            remotes += headRemoteName
         }
 
         //Fetch base and head repo
